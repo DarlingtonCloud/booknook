@@ -1,3 +1,13 @@
+const multer = require('multer');
+const upload = multer({ storage: multer.memoryStorage() });
+
+// example placeholder (we will replace blob later)
+async function uploadImage(fileBuffer, fileName, mimeType) {
+  // temporary local mock (so it works now)
+  return `https://fake-storage.com/${fileName}`;
+}
+
+console.log("✅ books.js loaded");
 const express = require('express');
 const router = express.Router();
 const { sql, getPool } = require('../db');
@@ -74,3 +84,37 @@ router.delete('/:id', async (req, res) => {
 });
 
 module.exports = router;
+
+router.post('/:id/cover', upload.single('cover'), async (req, res) => {
+  try {
+    const file = req.file;
+    const bookId = req.params.id;
+
+    if (!file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const fileName = `book-${bookId}-${Date.now()}`;
+
+    const imageUrl = await uploadImage(
+      file.buffer,
+      fileName,
+      file.mimetype
+    );
+
+    const pool = await getPool();
+
+    await pool.request()
+      .input('id', sql.Int, bookId)
+      .input('coverUrl', sql.NVarChar, imageUrl)
+      .query('UPDATE Books SET CoverUrl=@coverUrl WHERE Id=@id');
+
+    res.json({
+      message: 'Cover uploaded successfully',
+      imageUrl
+    });
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
